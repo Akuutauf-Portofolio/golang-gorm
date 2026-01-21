@@ -1,0 +1,101 @@
+Object relational mapping
+- ORM atau singkatan dari Object Relational Mapping, adalah teknik untuk memetakan data dari database relational ke dalam object dalam pemrograman
+- ketika kita belajar golang database, kita belajar pattern bernama repository, yang digunakan sebagai jembatan komunikasi ke database
+- saat membuat repository, kita membuat struct entity sebagai representasi dari tabel di database
+- hal itu sebenarnya sudah bisa dibilang sebuah ORM, namun masih dilakukan secara manual
+
+GORM
+- GORM adalah satu library untuk implementasi ORM secara otomatis di golang
+- dengan menggunakan GORM, kita bisa fokus membuat pemetaan struct entity, tanpa harus memikirkan detail dari implementasi SQL yang harus kita buat untuk memanipulasi datanya
+- GORM juga mendukung relasi antar entity / table, baik itu one to one, one to many, sampai many to many
+- referensi : https://gorm.io/
+
+install library :
+- testify : go get github.com/stretchr/testify
+- assert : go get github.com/stretchr/testify/assert
+- install library yang kurang : go mod tidy (optional)
+- gorm : go get gorm.io/gorm
+- gorm mysql (hanya untuk mysql) : go get gorm.io/driver/mysql
+
+database connection
+- hal pertama yang perlu kita lakukan sebelum menggunakan GORM, adalah membuat koneksi ke database
+- gunakan database yang sesuai dengan yang kita gunakan
+- untuk membuat koneksi ke database, kita bisa gunakan function gorm.Open()
+- tiap jenis database memiliki config masing-masing, kita bisa lihat konfigurasinya di referensi berikut ini : https://gorm.io/docs/connecting_to_the_database.html
+
+raw SQL
+- Raw SQL artinya membuat query SQL secara manual
+- terdapat 2 jenis sql, untuk melakukan query (select), atau untuk mengubah data (insert, update, delete)
+- untuk melakukan query (select data), kita bisa menggunakan method Raw(sql) di gorm.DB
+- dan untuk melakukan manipulasi data, bisa gunakan method Exec(sql) di gorm.DB
+
+sql.Row dan sql.Rows
+- GORM sendiri sebanarnya di dalamnya tetap menggunakan package sql bawaan dari golang
+- jika kita ingin mendapatkan hasil query dalam bentuk sql.Rows, kita bisa menggunakan method Rows() setelah melakukan query
+
+model
+- model atau entity adalah struct representasi dari tabel di database
+- saat membuat tabel di database, direkomendasikan dibuatkan struct sebagai representasinya
+- hal ini agar kita tidak perlu melakukan pembuatan perintah SQL secara manual lagi
+
+convention
+- saat membuat struct, secara default GORM akan melakukan mapping secara otomatis dimana nama tabel akan dipilih dari nama struct menggunakan lower_case jamak (contoh tabel 'OrderDetail', maka akan menjadi 'order_details'), sedangkan nama kolom akan dipilih menggunakan lower_case
+- selain itu, secara otomatis GORM akan memilih field ID sebagai primary key
+- namun, sebenarnya disarankan dibanding dilakukan secara otomatis menggunakan GORM, lebih bnaik kita deklarasikan secara manual menggunakan tag
+- referensi : https://gorm.io/docs/models.html#Fields-Tags
+
+table name
+- secara default, nama tabel akan menggunakan lower_case dan jamak (sifatnya lebih dari satu)
+- misal struct User akan menggunakan tabel users
+- misal lagi struct OrderDetail akan menggunakan nama tabel order_details
+- namun jika kita ingin menggunakan manual nama tabelnya, kita bisa menggunakan interface Tabler, yang mewajibkan untuk membuat method dengan nama TableName()
+
+model conventions
+- saat kita membuat struct untuk model, jika kita mengikuti aturan GORM, sebenarnya kita tidak perlu menggunakan tag
+
+Id sebagai primary key
+- GORM secara default menggunakan field ID sebagai primary key
+- jika kita membuat field ID di struct model, secara default akan digunakan sebagai primary key di tabel tersebut
+- jika kita ingin memilih field lain selain ID, maka kita harus menggunakan tag gorm:"primaryKey"
+
+Table Name
+- GORM secara default akan menggunakan nama tabel dengan format snake_cases (lowercase menggunakan '_' (underscore) sebagai pemisah, dan dijadikan jamak)
+- misal untuk stuct User, secara default akan menggunakan nama tabel 'users'
+- untuk struct OrderDetail, secara default akan menggunakan nama tabel 'order_details'
+- jika kita ingin mengubah nama default tabel nya, maka kita harus implementasi interface Tabler dengan menambahkan method TableName()
+
+Column Name
+- GORM secara default akan menggunakan snake_case untuk nama kolom dari struct model yang kita buat
+- misal jika field ID artinya nama kolomnya adalah 'id'
+- jika field FirstName artinya nama kolomnya adalah 'first_name'
+jika kita ingin mengubah nama kolom, kita bisa menggunakan tag gorm:"column:nama_kolom_baru"
+
+Timestamp Tracking
+- GORM memilik fitur timestamp tracking, yaitu melakukan perubahan otomatis untuk waktu dibuat dan diubah nya model menggunakan field CreatedAt dan UpdatedAt
+- CreatedAt dan UpdatedAt secara default akan menggunakan time.Now() ketika dibuat
+- UpdatedAt akan selalu diubah menjadi time.Now() ketika diupdate datanya
+- jika kita ingin mengubah nama field nya, kita bisa tambahkan gorm:"autoCreateTime:true" untuk CreatedAt
+- dan menggunakan gorm:"autoUpdateTime:true" untuk UpdatedAt
+
+field permission
+- secara default, semua field di struct model akan dianggap kolom di table
+- dan semua perubahan di field, akan di update ke tabel di database
+- namun, kadang-kadang mungkin kita ingin membuat field yang tidak merepresentasikan kolom di tabel sehingga tidak perlu create / update
+- atau mungkin terdapat kolom yang tidak perlu di update lagi
+- untuk mendukung kasus seperti itu, GORM menyediakan field permission menggunakan tag gorm
+
+    Tag     |   Keterangan
+-----------------------------------------------------------------------------------------------------------------------------
+    <-      |   Write permissio. <-:create (untuk create only), <-:update (untuk update only), <- (untuk create dan update)
+    ->      |   Read permission. ->:false (untuk no read permission/tidak boleh dibaca)
+    -       |   ignore field ini, tidak ada read/write permission
+
+embedded struct
+- secara default, field di model akan menjadi kolom tabel, kecuali yang menggunakan '-' (field permission ignore)
+- namun, bagaimana jika ternyata field yang kita buat sangat banyak?
+- kadang-kadang, ada baiknya kita simpan field yang sejenis dalam struct yang berbeda
+- untungnya, GORM memiliki fitur bernama embedded struct, dimana kita bisa melakukan embed struct dalam field di model, sehingga seluruh isi field di embedded struct akan dianggap field di model utamanya
+- misal, kita akan tambahkan kolom first_name, middle_name, dan last_name pada tabel users
+- lalu kita akan buat dalam embedded struct Name
+- kita bisa gunakan tag gorm:"embedded" untuk emnandai sebagai embedded struct
+
