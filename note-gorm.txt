@@ -99,3 +99,71 @@ embedded struct
 - lalu kita akan buat dalam embedded struct Name
 - kita bisa gunakan tag gorm:"embedded" untuk emnandai sebagai embedded struct
 
+create
+- untuk memasukkan data ke database, kita tidak perlu membuat SQL insert secara manual 
+- GORM bisa membaca data dari model yang sudah kita buat, lalu secara otomatis akan membuat perintah SQL sesuai dengan data model yang kita buat
+- kita bisa menggunakan method Create() pada gorm.DB
+
+batch insert
+- saat kita menggunakan Create() method, maka tiap data akan dibuatkan SQL insert
+- kadang ketika kita ingin memasukkan banyak data sekaligus, ada baiknya kita menggunakan sekali SQl insert agar lebih efektif
+- GORM mendukung hal ini menggunakan method Create(slices), atau jika ingin menentukan jumlah data per SQL insert, kita bisa gunakan CreateInBatches(slices, size)
+
+logger
+- secara default, informasi perintah SQL yang dieksekusi oleh GORM tidak akan di log
+- kita bisa mengubah level log dari GORM menggunakan gorm.Config{} ketika membuat koneksi database
+
+transaction
+- transaction hanya bisa terjadi jika kita menggunakan database connection yang sama
+- saat kita menggunakan method di gorm.DB, bisa saja tiap method akan menggunakan database connection yang berbeda, karena connection pool nya diatur oleh GORM
+- jika kita ingin melakukan transaction, kita bisa menggunakan method Transaction(callback), dan di dalam function callback kita bisa buat semua kode transaction nya
+
+manual transaction
+- selain menggunakan method Transaction(callback), kita juga bisa melakukan manajemen transaksi secara manual (tidak direkomendasikan jika sudah menggunakan gorm)
+- kita bisa membuat object gorm.DB ketika menjalankan transaksi dengan method Begin()
+- ketika ingin melakukan commit, kita bisa menggunakan method Commit()
+- ketika ingin melakukan rollback, kita bsia menggunakan method Rollback()
+
+query 
+- sama dengan Create(), GORM juga bisa secara otomatis membuat SQL SELECT dari model yang kita buat
+- sehingga tidak perlu lagi membuat SQL select secara manual
+
+single object
+- GORM menyediakan beberapa method untuk mengambil single object dari database
+- First() : digunakan untuk mengambil data pertama yang diurutkan berdasarkan id
+- Take() : digunakan untuk mengambil satu data, tanpa di urutkan
+- Last() : digunakan untuk mengambil data terakhir yang diurutkan berdasarkan id
+- jika data tidak ditemukan, maka akan error gorm.ErrRecordNotFound
+
+inline condition
+- saat kita menggunakan method First, Take atau Last, terdapat parameter selanjutnya bernama inline condition
+- inline condition tersebut secara otomatis akan menjadi kondisi WHERE di SQL SELECT nya
+
+query all objects
+- GORM juga bisa digunakan untuk melakukan QUERY pada semua data di tabel menggunakan method Find()
+- sama seperti method sebelumnya, method Find() juga mendukung inline condition jika kita mau tambahkan kondisi WHERE nya
+
+query condition
+- sebelumnya kita sudah bisa menggunakan inline parameter ketika melakukan query
+- selain menggunakan inline parameter, kita juga bisa menggunakan method Where() untuk mengubah kondisi query yang akan kita buat
+
+or condition
+- secara default saat kita menggunakan Where(), kondisi akan digabung menggunakan AND operator 
+- jika kita ingin menggunakan OR operator, kita bisa menggunakan method OR()
+
+not condition
+- dan jika kita ingin menggunakan NOT operator, kita bisa menggunakan method NOT()
+
+select Fields
+- secara default, semua kolom akan di select dan dimasukkan ke field Model
+- jika misal kita ingin menentukan kolom apa saja yang mau di select, kita bisa menggunakan method Select(columns)
+
+struct & map condition
+- saat kita menggunakan Where(), Not(), dan Or(). Kita juga bisa menggunakan parameter struct atau map
+- secara otomatis field atau key dijadikan kolom query, dan value akan dijadikan value query
+- ini cocok ketika pada kasus kita butuh query yang dinamis, sehingga kolom yang dicari bisa berbeda-beda sesuai kondisi pencarian
+
+order, limit dan offset
+- untuk melakukan sorting, kita juga bisa menggunakan method Order()
+- dan untuk melakukan paging, kita bsia menggunakan method Limit() dan Offset()
+
