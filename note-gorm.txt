@@ -167,3 +167,72 @@ order, limit dan offset
 - untuk melakukan sorting, kita juga bisa menggunakan method Order()
 - dan untuk melakukan paging, kita bsia menggunakan method Limit() dan Offset()
 
+query non model
+- saat kita menggunakan First(), Take(), Last() dan Find(), GORM melihat struktur tabel ke model yang kita gunakan
+- namun GORM memiliki fitur untuk menyimpan data (hasil query) ke data yang bukan model, contoh kita hanya ingin melakukan query first_name dan last_name saja di tabel users misalnya. kita bisa membuat struct berbeda dibanding menggunakan model users
+- jika kita ingin melakukan hal ini, GORM tetap harus tahu, model mana yang digunakan, caranya adalah kita bisa menggunakan method Model() untuk menentukan model yang digunakan
+
+update
+- untuk melakukan update data model yang sudah dimodifikasi, kita bisa menggunakan method Save() di gorm.DB
+- secara otomatis semua kolom yang memang memiliki permission untuk di update, akan di update ke database
+
+update selected column
+- secara default, melakukan Save() untuk data model, akan melakukan update semua kolom, walaupun tidak melakukan perubahan sebelumnya
+- jika kita ingin menentukan hanya beberapa kolom yang ingin di update, kita bisa menggunakan method Updates()
+- atau menggunakan method Update(kolom, value) jika hanya ingin update satu kolom saja
+
+auto increment
+- salah satu fitur yang biasa ada database adalah Auto Increment untuk primary key
+- contoh di Mysql ada AUTO_INCREMENT, atau di PostgreSQL ada SERIAL
+- GORM mendukung pembuatan ID yang auto increment, dan secara otomatis akan melakukan query data ID (data terakhir di database) setelah kita Create() datanya, sehingga tidak perlu melakukan query manual lagi
+- untuk memberi tahu bahwa field adalah auto_increment, kita harus menggunakan tag gorm:"autoIncrement"
+
+timestamp tracking
+- GORM menggunakan field CreatedAt dan UpdatedAt sebagai timestamp tracking
+- atau jika ingin menggunakan field yang berbeda, kita bisa tambahkan tag gorm:"autoCreateTime" atau gorm:"autoUpdateTime"
+
+tipe data timestamp tracking
+- sebelumnya kita menggunakan tipe data time.Time sebagai field untuk timestamp tracking 
+- namun, sebenarnya kita juga bisa ubah tipe datanya jika kita mau
+- GORM mendukung tipe data dalam bentuk number, dimana satuannya bisa kita ganti menjadi mili untuk mili second, atau nano untuk nano second, semuanya disimpan dalam waktu epoch unix time
+- misal tag gorm:"autoCreateTime:mili" atau gorm:"autoUpdateTime:mili"
+- referensi : https://currentmillis.com/
+
+upsert 
+- sebelumnya, kita telah menggunakan method Save() untuk melakukan update
+- method Save(), sebenarnya memiliki kemampuan untuk mendeteksi apakah harus melakukan Update atau Create
+- jika data yang kita kirim tidak memiliki value ID, maka secara default akan melakukan Create
+- jika data yang kira kirim memiliki value ID, maka akan melakukan Update
+- hal ini mungkin cocok untuk jenis data yang ID nya adalah Auto Increment, karena kita tidak butuh ID ketika melakukan create
+
+upsert : data non auto increment
+- untungnya, Save() juga bisa digunakan untuk proses otomatis Create
+- jadi Save() akan mencoba melakukan update terlebih dahulu, ketika mendeteksi jumlah effectedRow nya adalah 0, secara otomatis method Save() akan melakukan proses Create
+
+on conflict
+- GORM juga menawarkan pengaturan conflict di method Create()
+- dengan pengaturan ini, kita bisa menentukan ketika kita coba Create() data, lalu terjadi conflict (data sudah ada), apa yang mau kita lakukan?
+- kita bisa mengubah pengaturan conflict ini menggunakan method Clauses()
+
+delete
+- untuk melakukan penghapusan data, kita bisa menggunakan method Delete()
+- method Delete() juga mendukung Inline Condition atau menggunakan Where() method
+
+soft delete
+- soft delete adalah salah satu praktek yang sering dilakukan ketika membuat aplikasi
+- soft delete merupakan praktek menghapus data, tanpa menghapus data dari database
+- praktek ini membuat satu kolom biasanya berupa tipe data timestamp yang berisi waktu dihapus 
+- jika kolom tersebut berisi data, otomatis data tersebut dianggap sudah di delete
+
+GORM soft delete
+- GORM mendukung fitur Soft Delete secara otomatis, caranya kita cukup membuat field DeletedAt dengan time gorm.DeletedAt (alias untuk time.Time)
+- jika GORM mendeteksi terdapat field dengan nama DeletedAt, secara otomatis GORM akan melakukan soft delete
+- selain itu, ketika melakukan query, secara otomatis juga GORM akan menambah filter soft delete, yang artinya hasil query hanya data yang belum di delete
+
+unscoped
+- ketika kita ingin mengambil data yang termasuk ke dalam soft delete, kita bisa gunakan method Unscoped()
+- method Unscoped() juga bisa digunakan jika kita benar benar mau melakukan hard delete data secara permanen di database
+
+soft delete - peringatan
+- saat menggunakan soft delete, perhatikan penggunaan primary key atau unique index
+- ketika data sudah dihapus secara soft delete, sebenarnya data masih ada di tabel, oleh karena itu pastikan primary key atau unique index tidak duplikat dengan data yang sudah dihapus secara soft delete
