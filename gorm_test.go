@@ -758,7 +758,7 @@ func TestUncscoped(t *testing.T) {
 	// kita bisa gunakan method Unscoped()
 
 	// mengambil data todo yang sudah termasuk ke dalam soft delete dengan method Unscoped
-	err := db.Unscoped().First(&todo, "id = ?", 1).Error
+	err := db.Unscoped().First(&todo, "id = ?", 2).Error
 
 	// memastikan tidak ada error pada query
 	assert.Nil(t, err) 
@@ -771,5 +771,334 @@ func TestUncscoped(t *testing.T) {
 
 	// memastikan tidak ada error pada query
 	assert.Nil(t, err) 
-	fmt.Println(todo) // s
+	fmt.Println(todo) // sukses
+}
+
+// implementasi lock
+func TestLock(t *testing.T) {
+	// penggunaan locking cocok dilakukan pada transaction
+	err := db.Transaction(func(tx *gorm.DB) error {
+		// membuat variabel untuk menyimpan data user
+		var user User
+
+		// menggunakan transaction untuk lock
+		// strength update hanya untuk data update, jika ingin mengambil data gunakan 'SHARE
+		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Take(&user, "id = ?", "1").Error
+
+		// mengecek error
+		if err != nil {
+			return err
+		}
+
+		// update data user
+		user.Name.FirstName = "Dimas"
+		user.Name.MiddleName = ""
+		user.Name.LastName = "Prayoga"
+
+		// menyimpan perubahan
+		err = tx.Save(&user).Error
+
+		// return err (kalau error nil maupun ada, maka langsung keluar)
+		return err
+	})
+
+	// memastikan tidak ada error pada query
+	assert.Nil(t, err) 
+}
+
+// implementasi one to one (has one)
+func TestCreateWallet(t *testing.T) {
+	// menyiapkan data wallet yang akan di insert ke database
+	wallet := Wallet{
+		ID: "1",
+		UserId: "1",
+		Balance: 1000000,
+	}
+
+	// menambahkan data ke database
+	err := db.Create(&wallet).Error
+
+	// memastikan tidak ada error pada query
+	assert.Nil(t, err) 
+}
+
+// implementasi one to one - preload
+func TestRetrieveRelation(t *testing.T) {
+	// menyimpan data user
+	var user User
+
+	// mengambil data user dan relasi nya ke model wallet
+	// "Wallet", dalam preload adalah field relation yang di dapat dari model user
+	err := db.Model(&User{}).Preload("Wallet").Take(&user, "id = ?", "1").Error
+
+	// memastikan tidak ada error pada query
+	assert.Nil(t, err) 
+	assert.Equal(t, "1", user.ID) 
+	assert.Equal(t, "1", user.Wallet.ID) 
+}
+
+// implementasi one to one (has one) - join
+func TestRetrieveRelationJoin(t *testing.T) {
+	// menyimpan data user
+	var user User
+
+	// mengambil data user dan relasi nya ke model wallet
+	// menggunakan join, karena lebih cepat untuk data table yang relasinya has 
+	// users.id adalah merujuk data utama yang ingin diambil, karena menggunakan join,-
+	// pasti melakukan seleksi kedua tabel, sehingga diberikan nama tabelnya
+	err := db.Model(&User{}).Joins("Wallet").Take(&user, "users.id = ?", "1").Error
+
+	// memastikan tidak ada error pada query
+	assert.Nil(t, err) 
+	assert.Equal(t, "1", user.ID) 
+	assert.Equal(t, "1", user.Wallet.ID) 
+}
+
+// implementasi upsert relation
+func TestAutoCreateUpdate(t *testing.T) {
+	// menyiapkan data user yang ingin ditambahkan
+	user := User {
+		ID: "20",
+		Password: "rahasia",
+		Name: Name{
+			FirstName: "User 20",
+		},
+
+		// dan juga menambahkan sekalian untuk data wallet,-
+		// nah jika data wallet belum ada, berhubung ini relasi. 
+		// maka GORM akan otomatis menambahkan data wallet, jika data wallet belum ada
+		Wallet: Wallet{
+			ID: "20",
+			UserId: "20",
+			Balance: 1000000,
+		},
+	}
+
+	// melakukan insert data user sekaligus wallet (jika belum ada di database)
+	// jikalau data sudah ada di database, maka otomatis akan melakukan update berdasarkan ID
+	err := db.Create(&user).Error
+
+	// memastikan tidak ada error pada query
+	assert.Nil(t, err) 
+}
+
+func TestSkipAutoCreateUpdate(t *testing.T) {
+	// menyiapkan data user yang ingin ditambahkan
+	user := User {
+		ID: "21",
+		Password: "rahasia",
+		Name: Name{
+			FirstName: "User 21",
+		},
+
+		// tetap melampirkan data wallet
+		Wallet: Wallet{
+			ID: "21",
+			UserId: "21",
+			Balance: 1000000,
+		},
+	}
+
+	// melakukan insert data user tanpa meng-create atau update data wallet
+	// dengan enggunakan db.Omit(clauses.Associations)
+	// sehingga akan insert data user saja, data wallet akan di skip
+	err := db.Omit(clause.Associations).Create(&user).Error 
+
+	// memastikan tidak ada error pada query
+	assert.Nil(t, err) 
+}
+
+// implementasi one to many
+func TestUserAndAddresses(t *testing.T) {
+	// menyiapkan data user baru
+	user := User {
+		ID: "50",
+		Password: "rahasia",
+		Name: Name{
+			FirstName: "User 50",
+		},
+
+		// sekaligus menambahkan data wallet
+		// untuk relasi one to one, jika ingin melakukan select bisa menggunakan JOIN
+		Wallet: Wallet{
+			ID: "50",
+			UserId: "50",
+			Balance: 500000,
+		}, 
+
+		// relasi one to many juga memiliki upsert data relation
+		// sehingga ketika data tidak ada pada saat menambahkan user baru, dan data tersebut-
+		// di jabarkan dalam bentuk struct, maka data akan secara otomatis di tambahkan ke database oleh GORM
+		// sedangkan untuk one to many, jika ingin menggunakan select gunakan PRELOAD
+		Addresses: []Address{
+			{
+				// karena id data address bersifat auto increment, maka upsert data relation akan-
+				// otomatis menambahkan data yang sesuai
+				UserId: "50",
+				Address: "Indonesia",
+			},
+			{
+				UserId: "50",
+				Address: "Banyuwangi",
+			},
+		},
+	}
+
+	// menambahkan data user dan data foreign key nya (wallet dan address)
+	// karena bersifat upsert data relation
+	err := db.Create(&user).Error
+
+	// memastikan tidak ada error pada query
+	assert.Nil(t, err) 
+}
+
+func TestPreloadJoinOneToMany(t *testing.T) {
+	// menyimpan hasil select data dengan preload dan join
+	var users []User
+
+	// melakukan query untuk select data user
+	// preload digunakan untuk select data untuk relasi one to many
+	// sedangkan join digunakan untuk select data untuk relasi one to one
+	// mengambil data lebih dari satu
+	err := db.Model(&User{}).Preload("Addresses").Joins("Wallet").Find(&users).Error 
+	
+	// memastikan tidak ada error pada query
+	assert.Nil(t, err) 
+}
+
+func TestTakePreloadJoinOneToMany(t *testing.T) {
+	// menyimpan hasil select data dengan preload dan join
+	var user User
+
+	// melakukan query untuk select data user
+	// preload digunakan untuk select data untuk relasi one to many
+	// sedangkan join digunakan untuk select data untuk relasi one to one
+	// hanya mengambil satu data
+	err := db.Model(&User{}).Preload("Addresses").Joins("Wallet").Take(&user, "users.id = ?", "50").Error 
+	
+	// memastikan tidak ada error pada query
+	assert.Nil(t, err) 
+}
+
+// implementasi belongs to
+func TestBelongsToAddress(t *testing.T) {
+	// jika ingin mengambil data Address dengan include data user, maka bisa menggunakan preload dan join-
+	// karena sifatnya belongsto (User memiliki banyak address)
+	// namun jika kita ingin mengambil data user dengan include data Address, maka harus menggunakan Preload-
+	// karena 1 user kemungkinan bisa memiliki lebih dari 1 address, sehingga tidak bisa menggunakan Join
+
+	// 1. menggunakan preload
+	fmt.Println("Preload")
+	
+	// menyipakan data address untuk select dengan preload
+	var addresses []Address
+	
+	// melakukan query dengan preload dan include data user
+	err := db.Model(&Address{}).Preload("User").Find(&addresses).Error
+
+	// memastikan tidak ada error pada query
+	assert.Nil(t, err) 
+
+	// 2. menggunakan join
+	fmt.Println("Join")
+
+	// menyipakan data address untuk select dengan preload
+	var address Address
+	
+	// melakukan query dengan preload dan include data user
+	err = db.Model(&Address{}).Joins("User").Find(&address).Error
+
+	// memastikan tidak ada error pada query
+	assert.Nil(t, err) 
+}
+
+func TestBelongsToWallet(t *testing.T) {
+	// jika ingin mengambil data Wallet dengan include data user, maka bisa menggunakan preload dan join-
+	// karena sifatnya belongsto (User memiliki satu Wallet)
+	// namun jika kita ingin mengambil data user dengan include data Wallet, maka harus menggunakan Preload-
+	// karena 1 user kemungkinan bisa memiliki lebih dari 1 Wallet, sehingga tidak bisa menggunakan Join
+
+	// 1. menggunakan preload
+	fmt.Println("Preload")
+	
+	// menyipakan data wallet untuk select dengan preload
+	var wallets []Wallet
+	
+	// melakukan query dengan preload dan include data user
+	err := db.Model(&Wallet{}).Preload("User").Find(&wallets).Error
+
+	// memastikan tidak ada error pada query
+	assert.Nil(t, err) 
+
+	// 2. menggunakan join
+	fmt.Println("Join")
+
+	// menyipakan data wallet untuk select dengan preload
+	var wallet Wallet
+	
+	// melakukan query dengan preload dan include data user
+	err = db.Model(&Wallet{}).Joins("User").Find(&wallet).Error
+
+	// memastikan tidak ada error pada query
+	assert.Nil(t, err) 
+}
+
+// implementasi many to many
+func TestCreateManyToMany(t *testing.T) {
+	// menyiapkan data product, untuk melakukan simulasi pengujian
+	product := Product{
+		ID: "P001",
+		Name: "Contoh Product",
+		Price: 200000,
+	}
+
+	// menambahkan data product terlebih dahulu di database
+	err := db.Create(&product).Error
+
+	// memastikan tidak ada error pada query
+	assert.Nil(t, err) 
+
+	// untuk melakukan create, update dan delete di tabel penghubung (konsep many to many)
+	// maka bisa langsung gunakan method Table(), karena tabel penhubung tidak menerapkan struct
+	err = db.Table("user_like_product").Create(map[string]interface{} {
+		"user_id": "1",
+		"product_id": product.ID,
+	}).Error
+
+	// memastikan tidak ada error pada query
+	assert.Nil(t, err) 
+	
+	err = db.Table("user_like_product").Create(map[string]interface{} {
+		"user_id": "2",
+		"product_id": product.ID,
+	}).Error
+
+	// memastikan tidak ada error pada query
+	assert.Nil(t, err) 
+}
+
+func TestPreloadManyToManyProduct(t *testing.T) {
+	// menyimpan data product
+	var product Product
+
+	// melakukan query dengan preload, untuk mengambil siapa saja (user) yang menyukai sebuah product
+	// preload liked by users, adalah field relasi pada tabel Product
+	err := db.Preload("LikedByUsers").Take(&product, "id = ?", "P001").Error
+
+	// memastikan tidak ada error pada query
+	assert.Nil(t, err) 
+	assert.Equal(t, 2, len(product.LikedByUsers)) // karena yang like product tadi ada 2 user pada pengujian sebelumnya
+}
+
+func TestPreloadManyToManyUser(t *testing.T) {
+	// menyimpan data user
+	var user User
+
+	// melakukan query dengan preload, untuk mengambil product apa saja yang disukai oleh user
+	// preload like products, adalah field relasi pada tabel User
+	err := db.Preload("LikeProducts").Take(&user, "id = ?", "1").Error
+
+	// memastikan tidak ada error pada query
+	assert.Nil(t, err) 
+	assert.Equal(t, 1, len(user.LikeProducts))
 }

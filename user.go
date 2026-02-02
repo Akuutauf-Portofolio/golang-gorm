@@ -19,6 +19,22 @@ type User struct {
 	// karena sudah diberikan nama kolom nya adalah 'UpdatedAt' (termasuk ke attribute updated_at juga)
 	UpdatedAt time.Time `gorm:"column:updated_at;autoCreateTime;autoUpdateTime"`
 	Information string `gorm:"-"` // di abaikan / tidak ada kolom nya di database
+
+	// implementasi one to one (has one)
+	Wallet Wallet `gorm:"foreignKey:user_id;references:id"`
+
+	// implementasi one to many (has many)
+	Addresses []Address `gorm:"foreignKey:user_id;references:id"`
+
+	// implementasi relasi many to many
+	// menambahkan relasi ke tabel penghubung menuju ke tabel product sebagai many to many
+	
+	// many 2 many : menunjukkan tabel penghubung antara user dan product
+	// foreignKey:id : menunjukkan id (field primary key) di tabel sekarang (user)
+	// joinForeignKey:user_id : menunjukkan foreign key pada tabel penghubung yang menghubungkan ke user
+	// references:id : menunjukkan id (field primary key di tabel lain (product)
+	// joinReferences:product_id : menunjukkan foreign key pada tabel penghubung yang menghubungkan ke product
+	LikeProducts []Product `gorm:"many2many:user_like_product;foreignKey:id;joinForeignKey:user_id;references:id;joinReferences:product_id"`
 }
 
 // membuat method baru untuk mengganti nama tabel (alias)

@@ -236,3 +236,92 @@ unscoped
 soft delete - peringatan
 - saat menggunakan soft delete, perhatikan penggunaan primary key atau unique index
 - ketika data sudah dihapus secara soft delete, sebenarnya data masih ada di tabel, oleh karena itu pastikan primary key atau unique index tidak duplikat dengan data yang sudah dihapus secara soft delete
+
+model struct
+- GORM menyediakan sebuah struct bernama model yang berisi field ID, CreatedAt, UpdatedAt dan DeleteAt
+- ini cocok digunakan ketika kita menggunakan field yang sesuai dengan convention nya GORM 
+- contoh misal kita bisa gunakan struct model ini ketika membuat model Todo
+
+lock
+- hal yang biasa kita programmer lakukan saat menggunakan database adalah melakukan lock data
+- biasanya, ini dilakukan agar tidak terjadi RACE CONDITION ketika memanipulasi data yang sama oleh beberapa request
+- untuk melakukan lock menggunakan GORM, kita bisa menambahkan Clauses() Locking
+- kita bisa menentukan jenis locknya, apakah itu UPDATE, SHARE atau yang lainnya. Sesuai dengan dukungan database yang kita gunakan
+
+one to one
+- relationship dalam database yang paling sederhana adalah one to one, dimana data di tabel berelasi dengan satu data di tabel lain
+- di GORM, relasi one to one disebut juga relasi HasOne
+- untuk membuat relasi one to one di model sangat mudah, kita cukup buat field dengan tipe model yang berelasi (foreign key)
+- lalu kita bisa tambahkan informasi di tag
+- gorm:"foreignKey:nama_kolom" : untuk kolom yang dijadikan foreign key
+- gorm:"references:nama_kolom" : untuk kolom yang dijadikan reference
+
+preload
+- secara default, relasi tidak akan di query oleh GORM, artinya sifatnya adalah LAZY
+- jika kita ingin melakukan query relation (EAGER) secara langsung ketika melakukan query model, kita bisa sebutkan relasi yang ingin kita load menggunakan method Preload()
+
+join
+- menggunakan Preload(), GORM akan melakukan pengambilan data relasi menggunakan query yang terpisah
+- hal ini cocok ketika menggunakan relasi one to many atau many to many
+- namun pada kasus one to one, kadang ada baiknya kita lakukan sekali query saja menggunakan JOIN, karena hasilnya hanya satu data, jadi proses nya lebih cepat
+- jika kita ingin menggunakan join, kia bisa menggunakan method Joins(), lalu menyebutkan field mana yang akan kita lakukan JOIN
+
+auto upsert relation (create/update)
+- saat kita menggunakan relasi, lalu kita ingin melakukan create / update data Model, secara default GORM akan mengecek relasi yang terdapat di data tersebut
+- jika terdapat relasi, GORM akan melakukan proses Upsert terhadap data relasinya, sehingga kita tidak perlu melakukan create / update data relasi secara manual
+
+skip auto create / update
+- jika kita tidak mau melakukan auto create / update data relasi, kita bisa gunakan method Omit() yang berisi clause.Associations
+- dimana method ini akan memberi tahu GORM bahwa kita tidak mau melakukan auto create / update untuk data relasinya
+
+one to many
+- relasi one to many adalah relasi dimana data di tabel bisa memiliki relasi ke banyak data di tabel lain
+- di GORM, one to many disebut relasi Has many
+- untuk membuat relasi one to many, kita bisa gunakan field dengan tipe slice model yang berelasi 
+- kita juga bisa menentukan informasi seperti foreignKey dan references nya, sama seperti ketika menggunakan relasi one to one
+
+belongs to di one to many
+- saat kita membuat relasi one to many, ada sudut pandang lain dari Model sebelahnya, yaitu relasi Many to one
+- pada kasus ini, kita bisa menggunakan relasi Belongs To (milik) di GORM
+- contoh sebelumnya kita tahu bahwa user punya banyak Address, artinya Address milik (belongs to) User
+- kita bisa tambahkan relasi ini di Model Address, agar ketika kita melakukan query ke model Address, kita juga bisa mendapatkan informasi Usernya
+- cara membuatnya, mirip seperti ketika membuat relasi one to one
+
+belongs to di one to one
+- selain di one to many, sebenarnya belongs to bisa di implementasikan di relasi one to one
+- sebelumnya kita sudah tahu bahwa User punya satu (has one) Wallet, artinya wallet itu milik (belongs to) User
+- kita bisa tambahkan field User di model Wallet sebagai relasi belongs to
+- namun, karena di golang, cyclic itu tidak boleh, maka untuk menambahkan relasi belongs to di one to one, kita perlu menggunakan pointer
+- cyclic : adalah konsep dimana struct satu (User) butuh struct lain (Wallet), dan struct lain (Wallet) tersebut butuh ke struct ke yang lain (User) dan seterusnya. Hal ini tidak diperbolehkan di golang
+
+many to many
+- relasi yang paling kompleks adalah relasi many to many
+- seperti yang sudah kita ketahui, bahwa untuk relasi many to many, kita harus membuat tabel jembatan penghubung antara dua tabel
+- GORM juga mendukung relasi many to many, caranya mudah kita hanya perlu membuat field berupa slice di kedua model yang berelasi
+- untuk memberi tahu tabel penghubung dan juga kolom untuk join nya, kita bisa menggunakan tag
+
+many to many tag
+- untuk memberi tahu nama tabel penghubung, kita bisa menggunakan tag
+gorm:"many2many:nama_tabel"
+- saat melakukan query many to many, terdapat banyak sekali kolom yang perlu diketahui, seperti: 1. kolom id di Model pertama
+2. kolom foreign key Model pertama di tabel penghubung
+3. kolm id di Model kedua
+4. kolom foreign key Model kedua di tabel penghubung
+
+sehingga, semuanya bisa kita gunakan tag berikut :
+1. gorm:"foreignKey:kolom_id" : untuk id di model pertama
+2. gorm:"joinForeignKey:kolom_id" : untuk foreign key Model pertama di tabel penghubung
+3. gorm:"foreignKey:kolom_id" : untuk id di model kedua
+4. gorm:"joinForeignKey:kolom_id" : untuk foreign key Model kedua di tabel penghubung
+
+contoh kasus (many to many)
+- misal kita akan membuat fitur dimana user bisa like banyak product, dan satu product bisa di like banyak user
+- artinya kita akan membuat model Product, lalu akan membuat relasi many to many antara user dan product
+
+create / update / delete relasi many to many
+- salah satu tantangan relasi many to many adalah, bagaimana cara melakukan create/update/delete relasi many to many
+- hal ini karena tabel penghubung tidak memiliki representasi Model di GORM
+- untungnya, GORM bisa digunakan untuk memanipulasi data, tanpa harus menggunakan Model
+- kita bisa gunakan method Table() pada form.DB untuk menyebut tabel mana yang mau kita pilih
+- walaupun cara ini bisa dilakukan, tapi sebenarnya cara yang lebih baik yaitu menggunakan fitur bernama Association Mode
+
