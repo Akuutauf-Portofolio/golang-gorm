@@ -1102,3 +1102,295 @@ func TestPreloadManyToManyUser(t *testing.T) {
 	assert.Nil(t, err) 
 	assert.Equal(t, 1, len(user.LikeProducts))
 }
+
+// implementasi association mode
+func TestAssociation(t *testing.T) {
+	// menyiapkan data product
+	var product Product
+
+	// mengambil data produk berdasarkan id tertentu
+	err := db.Take(&product, "id = ?", "P001").Error
+
+	// memastikan tidak ada error pada query
+	assert.Nil(t, err) 
+
+	// menyiapkan data users
+	var users []User
+
+	// mengambil data user yang menyukai product ini, berdasarkan nilai tertentu pada suatu kolom
+	// dengan mengunakan method Association(), kita bisa melakukan query untuk filtering data yang berelasi (user)
+	// juga dengan kita menambahkan relasi pada tabel Product ke method Association(), maka sebenarnya-
+	// kita melakukan query di table user saat itu juga
+	err = db.Model(&product).Where("users.first_name LIKE ?", "%User%").Association("LikedByUsers").Find(&users)
+
+	// memastikan tidak ada error pada query
+	assert.Nil(t, err) 
+	assert.Equal(t, 1, len(users))
+}
+
+func TestAssociationAppend(t *testing.T) {
+	// menyiapkan data user
+	var user User
+
+	// mengambil sebuah data user
+	err := db.Take(&user, "id = ?", "3").Error
+
+	// memastikan tidak ada error pada query
+	assert.Nil(t, err) 
+
+	// menyiapkan data product
+	var product Product
+
+	// mengambil sebuah data product
+	err = db.Take(&product, "id = ?", "P001").Error
+
+	// memastikan tidak ada error pada query
+	assert.Nil(t, err) 
+
+	// method append digunakan untuk menambahkan data sepertihalnya pada baris 1036 (menambahkan data ke database)
+	// bedanya, kalau yang sebelumnya, kita menyebutkan table. sedangkan ini tidak menggunakan tabel
+	// cukup dengan mengambil model dasar nya yaitu Product (karena ingin menambahkan data berdasarkan relasi LikedByUsers)-
+	// dan method Append adalah user, maka artinya user akan like product
+	err = db.Model(&product).Association("LikedByUsers").Append(&user)
+
+	// jika menggunakan method Append, meskipun data sudah ada, dan ketika mau di insert dengan data yang sama,-
+	// maka akan melakukan update
+
+	// memastikan tidak ada error pada query
+	assert.Nil(t, err) 
+}
+
+func TestAssociationReplace(t *testing.T) {
+	// method Replace(), cocok untuk relasi one to one atau belongs to
+	// menggunakan db transaction, karena terdapat beberapa operasi berulang (menghapus relasi lama, dan menginsert relasi yang baru)
+	// sehingga disarankan untuk replace menggunakan transaction
+	err := db.Transaction(func(tx *gorm.DB) error {
+		// menyiapkan data user
+		var user User
+
+		// mengambil sebuah data user
+		err := tx.Take(&user, "id = ?", "1").Error
+		
+		// memastikan tidak ada error pada query
+		assert.Nil(t, err) 
+
+		// menyiapkan data Wallet baru
+		wallet := Wallet{
+			ID: "01",
+			UserId: user.ID,
+			Balance: 800000,
+		}
+
+		// melakukan replace (pergantian data yang sudah ada), dengan method Replace
+		// jadi pada kode di bawah ini 
+		err = tx.Model(&user).Association("Wallet").Replace(&wallet)
+
+		return err
+	})
+
+	// ! pengujian ini ketika dijalankan akan menyebabkan error, penjelasan di note (baris 333)
+
+	// memastikan tidak ada error pada query
+	assert.Nil(t, err) 
+}
+
+func TestAssociationDelete(t *testing.T) {
+	// menyiapkan data user
+	var user User
+
+	// mengambil sebuah data user
+	err := db.Take(&user, "id = ?", "3").Error
+
+	// memastikan tidak ada error pada query
+	assert.Nil(t, err) 
+
+	// menyiapkan data product
+	var product Product
+
+	// mengambil sebuah data product
+	err = db.Take(&product, "id = ?", "P001").Error
+
+	// memastikan tidak ada error pada query
+	assert.Nil(t, err) 
+
+	// user 3 sudah tidak liked ke product P001, kita bisa hapus relasi menggunakan Delete()
+	err = db.Model(&product).Association("LikedByUsers").Delete(&user)
+
+	// memastikan tidak ada error pada query
+	assert.Nil(t, err) 
+}
+
+func TestAssociationClear(t *testing.T) {
+	// menyiapkan data product
+	var product Product
+
+	// mengambil sebuah data product
+	err := db.Take(&product, "id = ?", "P001").Error
+
+	// memastikan tidak ada error pada query
+	assert.Nil(t, err) 
+
+	// menghapus semua data relasi dari tabel Product ke tabel User, melalui tabel user like product-
+	// dengan menggunakan method Clear()
+	// menjadikan product P001, tidak di sukai oleh user manapun lagi
+	err = db.Model(&product).Association("LikedByUsers").Clear()
+
+	// memastikan tidak ada error pada query
+	assert.Nil(t, err) 
+}
+
+// implementasi preloading
+func TestPreloading(t *testing.T) {
+	// menyiapkan data user
+	var user User
+
+	// melakukan query untuk mengambil data user (id = "1") yang memiliki nilai wallet sekian
+	// untuk melakukan query ke tabel Wallet, kita bisa menggunakan relation pada tabel User yaitu "Wallet"-
+	// yang mana akan kita masukkan ke dalam method Preload
+	// dan menambahkan inline condition, untuk kondisi yang kita butuhkan
+	err := db.Preload("Wallet", "balance >= ?", 1000000).Take(&user, "id = ?", "1").Error
+
+	// jika user dengan id 1 balance nya tidak memenuhi kondisi, maka data wallet tidak akan diambil
+	fmt.Println(user)
+
+	// memastikan tidak ada error pada query
+	assert.Nil(t, err) 
+}
+
+// implementasi nested preloading
+func TestPreloadNested(t *testing.T) {
+	// menyiapkan data wallet
+	var wallet Wallet
+
+	// melakukan query ke data wallet, dan mengambil data relasinya yaitu User, dan Addresses milik User
+	err := db.Preload("User.Addresses").Take(&wallet, "id = ?", "50").Error
+	
+	// memastikan tidak ada error pada query
+	assert.Nil(t, err) 
+
+	// menampilkan data wallet, user dan addresses milik user
+	fmt.Println(wallet)
+	fmt.Println(wallet.User)
+	fmt.Println(wallet.User.Addresses)
+}
+
+// implementasi preload all
+func TestPreloadAll(t *testing.T) {
+	// menyiapkan data user
+	var user User
+
+	// melakukan preload ke seluruh relasi di tabel User (mencakup Wallet, Addresses, dan LikeProducts)
+	// namun perlu diperhatikan untuk preload all di sini, karena banyak query yang dilakukan
+	err := db.Preload(clause.Associations).Take(&user, "id = ?", "1").Error
+
+	// memastikan tidak ada error pada query
+	assert.Nil(t, err) 
+
+	// menampilkan data user
+	fmt.Println(user)
+}
+
+// implementasi joins
+func TestJoinQuery(t *testing.T) {
+	// menyiapkan data users
+	var users []User
+
+	// melakukan joins secara manual
+	// mirip seperti inner join, wajib ada untuk kedua data user dan wallet nya
+	err := db.Joins("join wallets on wallets.user_id = users.id").Find(&users).Error 
+
+	// memastikan tidak ada error pada query
+	assert.Nil(t, err) 
+	assert.Equal(t, 3, len(users))
+
+	// mengosongkan data users
+	users = []User{}
+
+	// melakukan joins dengan field relation pada model User
+	err = db.Joins("Wallet").Find(&users).Error // defaultnya menggunakan query left join
+
+	// memastikan tidak ada error pada query
+	assert.Nil(t, err) 
+	assert.Equal(t, 19, len(users))
+}
+
+// implementasi join dengan pengkondisian
+func TestJoinWithCondition(t *testing.T) {
+	// menyiapkan data users
+	var users []User
+
+	// menggunakan join dengan kondisi (manual)
+	// jika join secara manual, wajib menyebutkan nama tabel untuk pengkondisiannya
+	// akan menghasilkan data yang tanpa melampirkan wallet
+	err := db.Joins("join wallets on wallets.user_id = users.id AND wallets.balance > ?", 500000).Find(&users).Error
+
+	// memastikan tidak ada error pada query
+	assert.Nil(t, err) 
+	assert.Equal(t, 2, len(users))
+
+	// mengkosongkan data users
+	users = []User{}
+
+	// menggunakan join dengan kondisi (menggunakan field / alias)
+	// jika kita menambahkan kondisi pada join, dengan cara ini cukup memanggil alias (field relationnya)
+	// menghasilkan data dengan melampirkan datanya
+	err = db.Joins("Wallet").Where("Wallet.balance > ?", 500000).Find(&users).Error // menggunakan field relation (Wallet)
+
+	// memastikan tidak ada error pada query
+	assert.Nil(t, err) 
+	assert.Equal(t, 2, len(users))
+}
+
+// implementasi query aggregation
+func TestCount(t *testing.T) {
+	// menyiapkan data count
+	var count int64
+
+	// menghitung data User yang memiliki balance diatas sekian (dengan kondisi tertentu)
+	err := db.Model(&User{}).Joins("Wallet").Where("Wallet.balance > ?", 500000).Count(&count).Error
+
+	// memastikan tidak ada error pada query
+	assert.Nil(t, err) 
+	assert.Equal(t, int64(2), count)
+}
+
+// implementasi query aggregation yang lain (manual)
+type AggregationResult struct {
+	TotalBalance int64
+	MinBalance int64
+	MaxBalance int64
+	AvgBalance float64
+}
+
+func TestAggregation(t *testing.T) {
+	// menyiapkan hasil aggregation
+	var result AggregationResult
+
+	// melakukan aggregation secara manual dengan select (untuk selain count)
+	err := db.Model(&Wallet{}).Select("sum(balance) as total_balance", "min(balance) as min_balance",
+	"max(balance) as max_balance", "avg(balance) as avg_balance").Take(&result).Error
+
+	// memastikan tidak ada error pada query
+	assert.Nil(t, err) 
+	assert.Equal(t, int64(3000000), result.TotalBalance)
+	assert.Equal(t, int64(1000000), result.MinBalance)
+	assert.Equal(t, int64(1000000), result.MaxBalance)
+	assert.Equal(t, float64(1000000), result.AvgBalance)
+}
+
+
+func TestAggregationGroupByHaving(t *testing.T) {
+	// menyiapkan hasil aggregation
+	var results []AggregationResult
+
+	// melakukan aggregation secara manual dengan select (untuk selain count)
+	// menambahkan joins untuk group by dan having - untuk mengelompokkkan user dengan balance diatas sekian
+	err := db.Model(&Wallet{}).Select("sum(balance) as total_balance", "min(balance) as min_balance",
+	"max(balance) as max_balance", "avg(balance) as avg_balance").
+	Joins("User").Group("User.id").Having("sum(balance) > ?", 1000000).Find(&results).Error
+
+	// memastikan tidak ada error pada query
+	assert.Nil(t, err) 
+	assert.Equal(t, 0, len(results)) // karena tidak ada balanace yang diatas 1 juta
+}
+

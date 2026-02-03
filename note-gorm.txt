@@ -325,3 +325,47 @@ create / update / delete relasi many to many
 - kita bisa gunakan method Table() pada form.DB untuk menyebut tabel mana yang mau kita pilih
 - walaupun cara ini bisa dilakukan, tapi sebenarnya cara yang lebih baik yaitu menggunakan fitur bernama Association Mode
 
+association mode 
+- GORM memiliki fitur bernama Association Mode, yang digunakan untuk memanipulasi data relasi menggunakan object gorm.Association
+- fitur ini sangat berguna, misal ketika kita ingin menambah relasi ke model, terutama untuk relasi many to many yang tidak memiliki model untuk tabel penghubungnya
+- untuk membuat object Association, kita cukup menggunakan method Association(relasi)
+
+kenapa Replace menyebabkan error
+- hal ini terjadi karena di tabel Wallets, kita menambahkan aturan constraint NOT NULL pada kolom user_id
+- jadi ketika GORM membuat data wallet baru dengan id "01", dan dia coba menghapus user_id di data wallet sebelumnya yang bernilai "1", maka akan terjadi error
+- namun dari sini kita bisa tahu bahwa GORM akan menghapus relasi ke data sebelumnya ketika kita melakukan / menggunakan method Replace()
+- Sehingga Replace() cocok untuk relasi one to one, atau Belongs to, dan ketika kita coba menggunakan Append() di relasi tersebut, secara otomatis GORM akan mengubah menjadi operasi Replace(), bukan Append() lagi
+
+preloading
+- sebelumnya kita sudah tahu bahwa untuk melakukan loading relasi, kita bisa menggunakan Preloading()
+- bagaimana jika kita ingin menambahkan kondisi ketika melakukan preloading?
+- kita bisa tambahkan Inline Condition ketika melakukan preloading
+
+nested preloading
+- preloading juga bisa dilakukan untuk relasi yang nested
+- misal kita akan melakukan query untuk model Wallet, kita ingin melakukan preload ke user dan juga ke Address milik user
+- kita bisa gunakan preloading dengan menggunakan '.' (titik), misalnya "User.Addresses"
+
+preload all
+- jika kita ingin melakukan preload semua relasi hanya di sebuah Model tertentu (tidak bisa nested preload), kita bisa menggunakan clauses.Associations ketika melakukan Preloading()
+- namun perlu diingat, bahwa Preload All tidak akan melakukan load Nested Relation (contoh User.Addresses sebelumnya)
+
+join query
+- sebelumnya kita sudah melakukan Joins() dengan menyebutkan nama field relation nya
+- selain menggunakan nama Relation, kita juga bisa menggunakan Query manual ketika melakukan Joins
+- bedanya adalah, kolom relation nya tidak akan di query
+
+join condition
+- saat menggunakan joins manual, ketika kita ingin menambahkan kondisi di Join table nya, jangan lupa untuk menyebutkan nama table nya
+- namun saat menggunakan method Joins() menggunakan nama relasi, secara otomatis GORM akan membuat alias untuk nama relasi, jadi kita harus menggunakan nama relasi ketika menambahkan kondisi
+
+query aggregation
+- ada banyak query aggregation yang biasanya tersedia di database
+- di GORM, hanya menyediakan method aggregation untuk count() saja
+- jika kita ingin melakukan aggregation misal menggunakan Avg, Sum, Max, dan lain lain
+- maka kita harus melakukan secara manual menggunakan Select()
+
+group by & having
+- GORM juga menyediakan method untuk melakukan group by menggunakan method Group()
+- dan untuk melakukan having menggunakan method Having()
+
