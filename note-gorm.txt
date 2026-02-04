@@ -369,3 +369,99 @@ group by & having
 - GORM juga menyediakan method untuk melakukan group by menggunakan method Group()
 - dan untuk melakukan having menggunakan method Having()
 
+context
+- saat kita menggunakan golang, biasanya kita akan menggunakan context.context
+- bagaimana dengan GORM, dari awal kita belum pernah menggunakan context
+- GORM juga mendukung penggunaan context, kita bisa menggunakan method WithContext() ketika mau melakukan operasi menggunakan GORM
+
+scopes 
+- sebelumnya kita pernah menggunakan method scopes()
+- method scopes() juga bisa digunakan untuk menambahkan custom logic yang mungkin sering kita gunakan
+- kita cukup menambahkan function(*gorm.DB) *gorm.DB (sebagai return function)
+
+connection pool
+- connection pool mengatur maintain koneksi yang terbuka dan tertutup secara otomatis
+- kita hanya cukup menggunakan saja, tanpa harus pusing mengatur koneksinya
+- GORM sebenarnya didalamnya tetap menggunakan sql.DB
+- jadi jika kita ingin mengubah pengaturan poolnya, kita bisa menggunakan sql.DB
+
+migrator
+- sebelumnya kita sudah belajar tentang database migration
+- sebenarnya GORM memiliki fitur untuk melakukan migration secara otomatis
+- namun lebih direkomendasikan menggunakan database migration yang mendukung version agar tidak terjadi kesalahan ketika melakukan perubahan schema database
+- untuk mendapatkan object migrator, kita bisa menggunakan method Migrator()
+- referensi : https://pkg.go.dev/gorm.io/gorm#Migrator
+- fitur ini jarang digunakan di pengembangan aplikasi nyata, biasanya hanya digunakan untuk melakukan pengetesan dikomputer programmer saja
+
+hook
+- GORM memiliki fitur bernama hook
+- Hook adalah function didalam model yang akan dipanggil sebelum melakukan operasi create/query/update/delete
+- jika function hook tersebut mengembalikan error, maka secara otomatis GORM akan menghentikan operasi manipulasi datanya
+- function hook menggunakan struktur berikut :
+function(*gorm.DB) error
+
+hook untuk create
+- // begin transaction : menjalankan transaksi diawal proses
+- BeforeSave() : kalau model memiliki method ini maka akan dipanggil (optional)
+- BeforeCreate() : kalau model memiliki method ini juga akan dipanggil (optional)
+- // save before associations
+- // insert into database
+- // save after associations
+- AfterCreate() : kalau model memiliki method ini maka akan dipanggil (optional)
+- AfterSave() : kalau model memiliki method ini maka akan dipanggil (optional)
+- // commit or rollback transacntion 
+
+hook untuk update
+- // begin transaction : menjalankan transaksi diawal proses
+- BeforeSave() : kalau model memiliki method ini maka akan dipanggil (optional)
+- BeforeUpdate() : kalau model memiliki method ini juga akan dipanggil (optional)
+- // save before associations
+- // update database
+- // save after associations
+- AfterUpdate() : kalau model memiliki method ini maka akan dipanggil (optional)
+- AfterSave() : kalau model memiliki method ini maka akan dipanggil (optional)
+- // commit or rollback transacntion 
+
+hook untuk delete
+- // begin transaction : menjalankan transaksi diawal proses
+- BeforeDelete() : kalau model memiliki method ini juga akan dipanggil (optional)
+- // delete from database
+- AfterDelete() : kalau model memiliki method ini maka akan dipanggil (optional)
+- // commit or rollback transacntion 
+
+hook untuk find
+- // load data from database
+- preloading (eager loading) 
+- AfterFind() : kalau model memiliki method ini maka akan dipanggil (optional)
+
+performance
+- GORM sudah di optimize agar peformance nya baik
+- jadi secara default, GORM sudah baik jika kita gunakan untuk membuat aplikasi
+- tapi berikut kita akan berikan beberapa tips yang bisa kita lakukan lagi ketika ingin meningkatkan peforma aplikasi kita ketika menggunakan GORM
+
+TIPS 1 : matikan auto transaction
+- secara default, ketika kita melakukan create, update dan delete, semua akan dijalankan dalam transaction, walaupun kita tidak melakukannya
+- kita bisa mematikan fitur auto transaction ini jika kita mau
+- kita bisa ubah config ketika membuat gorm.DB dengan menambahkan 'SkipDefaultTransaction' menjadi true
+- dengan mematikan fitur ini, kita harus melakukan transaction secara manual (sesuai kebutuhan)
+
+TIPS 2 : cache prepared statement
+- secara default saat GORM membuat query menggunakan prepare statement, dia tidak akan menyimpan SQL query nya di memory
+- kita bisa mengaktifkan fitur ini, agar prepare statement bisa di simpan di memory, sehingga ketika kita sering menggunakan query yang sama, GORM tidak perlu membuat prepare statement nya lagi secara terus menerus, cukup menggunakan yang sudah dibuat dan di simpan ke dalam memory
+- kita bisa aktifkan fitur ini di config dengan nama 'PrepareStmt' menjadi true
+
+TIPS 3 : select fields
+- secara default, saat kita menggunakan GORM, semua field di model akan dilakukan select
+- ketika kita hanya butuh beberapa field saja, tidak disarankan untuk melakukan select semua field, apalagi memang fieldnya tidak kita butuhkan
+- sangat disarankan untuk memilih field mana yang mau kita select menggunakan method Select()
+- jadi jika ingin melakukan query Select sangat direkomendasikan, agar tidak mengambil seluruh field yang tidak kita butuhkan
+
+TIPS 4 : large result
+- saat kita melakukan query Find() lalu di simpan ke dalam slice, secara default GORM akan mengambil seluruh data dan menyimpannya di dalam slice (select terus simpan ke slice)
+- baik semua isi slice kita baca atau tidak, hal ini kadang tidak optimal jika ukuran hasil query nya besar
+- disarankan untuk menggunakan 'Lazy Result' menggunakan 'Rows()' (proses menyimpan data secara bertahap) jika memang kita ingin melakukan query dengan jumlah yang besar, sehingga kita bisa ambil data yang dibutuhkan saja, tanpa harus menyimpan semuanya ke memory
+
+TIPS 5 : table split
+- jika model yang kita buat terlalu banyak field nya, maka secara default semua field akan di query oleh GORM
+- pada kasus seperti ini, selain kita bisa select field nya satu persatu, kita juga bisa coba split Model nya menjadi relasi one to one
+- sehingga kita cukup query pada data yang kita butuhkan, contoh sebelumnya kita melakukan split tabel antara User dan Model Wallet

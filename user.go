@@ -1,6 +1,10 @@
 package belajar_go_lang_gorm
 
-import "time"
+import (
+	"time"
+
+	"gorm.io/gorm"
+)
 
 // gorm otomatis mengenali tabel dengan nama 'users'
 // sehingga contoh kalau nama tabel / struct User => 'users' dan atau OrderDetail => 'order_details'
@@ -50,22 +54,17 @@ type Name struct {
 	LastName string `gorm:"last_name"`
 }
 
-// implementasi auto increment, menambahkan tabel dan model baru
-type UserLog struct {
-	ID        string `gorm:"primary_key;column:id;autoIncrement"` 
-	UserId  string `gorm:"column:user_id"`
-	Action  string `gorm:"column:action"`
-
-	// implementasi timestamp tracking
-	// mengubah tipe data timestamp dari time.Time menjadi int64(big int)
-	// dan menggunakan tag untuk default value create dan update nya menjadi mili
-	// ketika menambahkan atau mengupdate data, maka otomatis created_at dan updated_at akan di isi milli
-	// dan kita bisa konversi ke platform current millis untuk melihatnya
-	CreatedAt int64 `gorm:"column:created_at;autoCreateTime:milli;"`
-	UpdatedAt int64 `gorm:"column:updated_at;autoCreateTime:milli;autoUpdateTime:milli"`
-}
-
-// membuat method baru untuk mengganti nama tabel (alias)
-func (u *UserLog) TableName() string {
-	return "user_logs"
+// implementasi hook - untuk Before Create (operasi create/insert)
+func (u *User) BeforeCreate(db *gorm.DB) error {
+	// didalam function ini akan menjalankan operasi kustom
+	// jika terjadi error maka akan dibatalkan, sesuai dengan konsep hook
+	
+	// mengecek jika data user yang dibuat id nya menggunakan " "
+	if u.ID == "" {
+		// contoh mengubah id nya menjadi kustom
+		// mengatur format waktu nya (tahun-bulan-tanggal-jam-menit-detik)
+		u.ID = "user-" + time.Now().Format("20060102150405") 
+	}
+	
+	return nil
 }

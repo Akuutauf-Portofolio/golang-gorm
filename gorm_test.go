@@ -1,9 +1,11 @@
 package belajar_go_lang_gorm
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"gorm.io/driver/mysql"
@@ -21,12 +23,51 @@ func OpenConnection() *gorm.DB {
 		// implementasi logger
 		// menambahkan logger untuk memunculkan informasi log query sql
 		Logger: logger.Default.LogMode(logger.Info),
+
+		// implementasi performance
+		// tips 1 : matikan auto transaction
+		SkipDefaultTransaction: true,
+
+		// tips 2 : cache prepared statement
+		PrepareStmt: true,
 	})
 
 	// mengecek error
 	if err != nil {
 		panic(err)
 	}
+
+	// implementasi connection pool
+	sqlDB, err := db.DB()
+
+	// mengecek error
+	if err != nil {
+		panic(err)
+	}
+
+	// mengatur connection pool
+	// Batas maksimal koneksi ke database yang boleh aktif bersamaan.
+	// Kalau sudah 100 koneksi dipakai:
+	// - request berikutnya akan menunggu
+	// - bukan bikin koneksi baru
+	sqlDB.SetMaxOpenConns(100)
+
+	// Jumlah koneksi yang disimpan dalam kondisi siap pakai (nganggur).
+	// Saat ada request baru:
+	// - ambil dari sini dulu
+	// - jadi lebih cepat daripada buat koneksi baru
+	sqlDB.SetMaxIdleConns(10)
+
+	// Umur maksimal sebuah koneksi.
+	// Setelah 30 menit:
+	// - koneksi dipensiunkan
+	// - diganti koneksi baru
+	sqlDB.SetConnMaxLifetime(30 * time.Minute)
+
+	// Batas waktu koneksi boleh menganggur.
+	// Kalau 5 menit tidak dipakai:
+	// - koneksi akan ditutup
+	sqlDB.SetConnMaxIdleTime(5 * time.Minute)
 
 	return db
 }
@@ -1394,3 +1435,87 @@ func TestAggregationGroupByHaving(t *testing.T) {
 	assert.Equal(t, 0, len(results)) // karena tidak ada balanace yang diatas 1 juta
 }
 
+// implementasi context
+func TestContext(t *testing.T) {
+	// membuat context baru
+	ctx := context.Background()
+
+	// menyiapkan data users
+	var users []User
+
+	// melakukan query dengan context
+	err := db.WithContext(ctx).Find(&users).Error
+
+	// memastikan tidak ada error pada query
+	assert.Nil(t, err) 
+	assert.Equal(t, 19, len(users)) 
+}
+
+// implementasi scopes
+// dengan scopes memungkinkan kita untuk melakukan kustomisasi logic pada query database
+func BrokeWalletBalance(db *gorm.DB) *gorm.DB {
+	// di dalam function scopes, kita bisa tambahkan kustomisasi query yang kita inginkan
+	return db.Where("balance = ?", 0)
+}
+
+func SultanWalletBalance(db *gorm.DB) *gorm.DB {
+	// di dalam function scopes, kita bisa tambahkan kustomisasi query yang kita inginkan
+	return db.Where("balance >= ?", 1000000)
+}
+
+func TestScopes(t *testing.T) {
+	// menyiapkan data wallets
+	var wallets []Wallet
+
+	// memanggil function scopes yang sudah dibuat sebelumnya,-
+	// dengan menggunakan scopes query yang kita berikan lebih ringkas dan bisa digunakan kembali (reusable)
+	err := db.Scopes(BrokeWalletBalance).Find(&wallets).Error
+
+	// memastikan tidak ada error pada query
+	assert.Nil(t, err) 
+	assert.Equal(t, 0, len(wallets)) 
+
+	// mengosongkan data wallets
+	wallets = []Wallet{}
+
+	// memanggil function scopes kedua
+	err = db.Scopes(SultanWalletBalance).Find(&wallets).Error
+
+	// memastikan tidak ada error pada query
+	assert.Nil(t, err) 
+	assert.Equal(t, 3, len(wallets)) 
+}
+
+// implementasi Migrator
+func TestMigrator(t *testing.T) {
+	// melakukan migrasi dari struct ke table database secara otomatis dengan method AutoMigrate
+	err := db.Migrator().AutoMigrate(&GuestBook{})
+
+	// disaranakan menggunakan library migration golang, jangan gunakan migrator
+	// migrator hanya untuk pengetesan di komputer lokal saja
+
+	// memastikan tidak ada error pada query
+	assert.Nil(t, err) 
+}
+
+// implementasi hook
+func TestHook(t *testing.T) {
+	// menyiapkan data user
+	user := User{
+		ID: "", // kan mentrigger method BeforeCreate() pada model User
+		Password: "rahasia",
+		Name: Name{
+			FirstName: "User Saya",
+		},
+	}
+
+	// melakukan create
+	err := db.Create(&user).Error
+
+	// memastikan tidak ada error pada query
+	assert.Nil(t, err) 
+	assert.NotEqual(t, "", user.ID)
+
+	// menampilkan id user
+	fmt.Println(user.ID)
+}
